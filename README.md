@@ -1,3 +1,3 @@
 # RFID_relay
 
-change targetCard to the desired value
+Change targetCards to enable the cards that will open the relay
