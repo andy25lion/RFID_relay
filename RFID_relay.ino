@@ -17,6 +17,7 @@
 #include <SPI.h>
 #include <MFRC522.h>
 //#include <RFID.h>
+#define UID_SIZE 4
 
 constexpr uint8_t RST_PIN = 9;          // Configurable, see typical pin layout above
 constexpr uint8_t SS_PIN = 10;         // Configurable, see typical pin layout above
@@ -24,10 +25,24 @@ constexpr uint8_t RELAY_PIN = A0;
 
 uint8_t successRead;            // Variable integer to keep if we have Successful Read from Reader
 uint8_t lastValidStatus = 0;     // Save last valid read status so we don't switch too often
-byte readCard[4];               // Stores scanned ID read from RFID Module
+uint8_t readCard[UID_SIZE];               // Stores scanned ID read from RFID Module
 
-//////////////////////// CHANGE THIS FOR A FOR A DIFFERENT CARD ///////////////////////////
-byte targetCard[] = {0x79,0x2D,0x8E,0x9C};    // Target card UID that will switch the relay (only the first 4 bytes)
+struct UID {
+  uint8_t uid[UID_SIZE];
+  uint8_t enabled;
+};
+
+//////////////////////// UIDs WITH "ENABLED" BYTE 1 WILL OPEN THE RELAY ///////////////////////////
+UID targetCards[] =  {
+  { {0x79, 0x2D, 0x8E, 0x9C}, 0 },
+  { {0x4A, 0xD5, 0xCF, 0x81}, 0 },
+
+  { {0x1A, 0xA0, 0xDD, 0x81}, 0 },
+  { {0x89, 0x4C, 0x8F, 0x9C}, 0 },
+
+  { {0x5A, 0x17, 0xE0, 0x81}, 1 },
+  { {0x89, 0xE4, 0xB1, 0xB2}, 1 }
+};
 //////////////////////////////////////////////////////////////////////////////////////////
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);  // Create MFRC522 instance
@@ -51,7 +66,7 @@ void loop() {
   successRead = getID();
   if(successRead) {
     Serial.print("Card detected!\n");
-    if(memcmp(readCard, targetCard, 4) == 0){
+    if(checkUID()){
       if(!lastValidStatus) {
         Serial.print("Valid card, opening...\n");
         digitalWrite(RELAY_PIN, LOW);
@@ -89,7 +104,7 @@ uint8_t getID() {
     return 0;
   }
   Serial.print("Scanned PICC's UID: ");
-  for ( uint8_t i = 0; i < 4; i++) {
+  for ( uint8_t i = 0; i < UID_SIZE; i++) {
 //    readCard[i] = RC522.serNum[i];
     readCard[i] = mfrc522.uid.uidByte[i];
     Serial.print(readCard[i], HEX);
@@ -98,3 +113,14 @@ uint8_t getID() {
   mfrc522.PICC_HaltA(); // Stop reading (no use to read the entire card)
   return 1;
 }
+
+///////////////////////// Check for matching UIDs /////////////////////////////////
+uint8_t checkUID() {
+  uint8_t sizec = sizeof(targetCards) / sizeof(UID);//(UID_SIZE + 1);
+  for (uint8_t i = 0; i < sizec; i++){
+    if (targetCards[i].enabled == 1 && memcmp(readCard, targetCards[i].uid, UID_SIZE) == 0)
+      return 1;
+  }
+  return 0;
+}
+///////////////////////////////////////////////////////////////////////////////////
